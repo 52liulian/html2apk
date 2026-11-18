@@ -206,6 +206,13 @@ def verify_apk(path, expect):
     assert r and r[1] == vercode, f"versionCode 属性不符：{r}"
     print(f"    label={label!r} versionName={vname!r} versionCode={vercode} 包名={pkg or '默认'} ✓")
 
+    # 权限：模板自带的联网权限必须保留；用户勾选的权限应写入字符串池
+    assert "android.permission.INTERNET" in strings, "模板联网权限丢失"
+    for perm in expect.get("permissions", []):
+        assert perm in strings, f"权限未写入：{perm}"
+    if expect.get("permissions"):
+        print(f"    权限已写入 {len(expect['permissions'])} 项 ✓")
+
     for name in expect.get("assets_names", []):
         assert name in entries, f"缺少条目 {name}"
         print(f"    {name} ✓")
@@ -304,6 +311,7 @@ if __name__ == "__main__":
         "package": "com.xiao.toolkit",
         "assets": {"assets/url.txt": url},
         "icon": icon,
+        "permissions": ["android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION", "android.permission.VIBRATE"],
     })
     verify_apk("work/out-html.apk", {
         "label": "这是一个非常长的中文软件名称测试", "version_name": "1.0.0", "version_code": 1,

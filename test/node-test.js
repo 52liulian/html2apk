@@ -69,7 +69,8 @@ const cases = [
   {
     name: "out-url.apk",
     desc: "网址模式 + 中文软件名 + 图标 + 自定义包名",
-    opts: { label: "萧易寒工具箱", versionName: "2.3.7-beta", versionCode: 5, "package": "com.xiao.toolkit", url: "https://www.example.com", icon: iconData }
+    opts: { label: "萧易寒工具箱", versionName: "2.3.7-beta", versionCode: 5, "package": "com.xiao.toolkit", url: "https://www.example.com", icon: iconData,
+            permissions: ["android.permission.INTERNET", "android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION", "android.permission.VIBRATE"] }
   },
   {
     name: "out-html.apk",

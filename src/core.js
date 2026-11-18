@@ -227,6 +227,19 @@
     /* idxActivity 对应的字符串保持不变，显式写出以便审阅 */
     void idxActivity;
 
+    /* 3.5 准备要新增的权限：去重并把权限名追加进字符串池（索引追加在末尾，不影响已有索引） */
+    var permsToAdd = [];
+    if (req.permissions && req.permissions.length) {
+      var existing = collectExistingPerms(data.subarray(poolEnd), strings);
+      for (var pi = 0; pi < req.permissions.length; pi++) {
+        var pname = req.permissions[pi];
+        if (!pname || existing[pname]) continue;         /* 模板已声明的（如联网）不重复添加 */
+        var pidx = idxOf(pname);
+        if (pidx < 0) { strings.push(pname); pidx = strings.length - 1; }
+        permsToAdd.push(pidx);
+      }
+    }
+
     /* 4. 重建字符串池：头(28B) + 偏移表 + 逐条 4 字节对齐的 UTF-16 数据 */
     var offsets = new Uint32Array(strings.length);
     var dataParts = [];
@@ -261,14 +274,84 @@
     var pp = stringsStart2;
     for (var d2 = 0; d2 < dataParts.length; d2++) { pool.set(dataParts[d2], pp); pp += dataParts[d2].length; }
 
-    /* 5. 修补池后 chunk 流中的 versionCode 整型属性 */
+    /* 5. 在池后的 XML 节点流中插入权限声明，并修补 versionCode */
     var rest = data.subarray(poolEnd);
+    if (permsToAdd.length) rest = insertPermissions(rest, strings, permsToAdd);
     if (req.versionCode) patchVersionCode(rest, strings, req.versionCode);
 
     /* 6. 拼接并修正外层 XML chunk 总长度 */
     var out = concatBytes([data.subarray(0, 8), pool, rest]);
     wr32(out, 4, out.length);
     return out;
+  }
+
+  /**
+   * 扫描 XML 节点流，收集模板中已声明的权限名（避免重复添加联网权限）
+   * 节点流相对 poolEnd 起算，各 chunk 顺序：resource map → 元素节点…
+   */
+  function collectExistingPerms(data, strings) {
+    var found = {};
+    var idxUses = strings.indexOf("uses-permission");
+    var idxName = strings.indexOf("name");
+    if (idxUses < 0 || idxName < 0) return found;
+    var off = 0;
+    while (off + 8 <= data.length) {
+      var t = rd16(data, off), size = rd32(data, off + 4);
+      if (size < 8 || off + size > data.length) break;
+      if (t === CHUNK_XML_START_ELEM && rd32(data, off + 20) === idxUses) {
+        var attrStart = rd16(data, off + 24);
+        var attrSize = rd16(data, off + 26);
+        var attrCount = rd16(data, off + 28);
+        for (var k = 0; k < attrCount; k++) {
+          var ap = off + 16 + attrStart + k * attrSize;
+          if (rd32(data, ap + 4) === idxName && data[ap + 15] === 0x03) {
+            var vi = rd32(data, ap + 16);
+            if (vi < strings.length) found[strings[vi]] = true;
+          }
+        }
+      }
+      off += size;
+    }
+    return found;
+  }
+
+  /**
+   * 在 manifest 节点流中插入 uses-permission 节点对。
+   * 模板里已有 INTERNET 与 ACCESS_NETWORK_STATE 两个权限节点，
+   * 新节点插在第一个 uses-permission 之前，结构照抄模板（START 56B + END 24B）。
+   */
+  function insertPermissions(data, strings, nameIndexes) {
+    var idxUses = strings.indexOf("uses-permission");
+    var idxName = strings.indexOf("name");
+    var idxNs = strings.indexOf("http://schemas.android.com/apk/res/android");
+    if (idxUses < 0 || idxName < 0 || idxNs < 0) throw new Error("模板缺少构造权限节点所需的字符串");
+
+    /* 定位插入点：第一个 uses-permission START 节点的偏移 */
+    var insertAt = -1, off = 0;
+    while (off + 8 <= data.length) {
+      var t = rd16(data, off), size = rd32(data, off + 4);
+      if (size < 8 || off + size > data.length) break;
+      if (t === CHUNK_XML_START_ELEM && rd32(data, off + 20) === idxUses) { insertAt = off; break; }
+      off += size;
+    }
+    if (insertAt < 0) throw new Error("模板中未找到 uses-permission 节点，无法插入权限");
+
+    /* 复制模板权限节点的结构，仅替换权限名字符串索引 */
+    var templateStart = data.subarray(insertAt, insertAt + 56);
+    var templateEnd = data.subarray(insertAt + 56, insertAt + 80);
+    if (templateStart.length !== 56 || templateEnd.length !== 80 - 56) throw new Error("模板权限节点结构异常");
+
+    var blocks = [data.subarray(0, insertAt)];
+    for (var i = 0; i < nameIndexes.length; i++) {
+      var start = new Uint8Array(templateStart);
+      var end = new Uint8Array(templateEnd);
+      /* rawValue 与 typedValue.data 都要指向新的权限名索引 */
+      wr32(start, 36 + 8, nameIndexes[i]);   /* attribute.rawValue */
+      wr32(start, 36 + 16, nameIndexes[i]);  /* attribute.typedValue.data */
+      blocks.push(start, end);
+    }
+    blocks.push(data.subarray(insertAt));
+    return concatBytes(blocks);
   }
 
   /** 在 START_ELEMENT chunk 流中定位 manifest 元素的 versionCode 属性并就地修补 */
@@ -595,7 +678,8 @@
           label: opts.label,
           versionName: opts.versionName,
           versionCode: opts.versionCode,
-          "package": opts["package"]
+          "package": opts["package"],
+          permissions: opts.permissions
         });
 
         /* 2. 组装新条目 */
