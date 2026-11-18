@@ -16,6 +16,8 @@ work/curl-*.txt
 # 调试临时产物
 work/out-perm.apk
 work/out-dist-perm.apk
+work/out-nonet.apk
+work/out-onlycam.apk
 work/ui-*.png
 work/ui-*.js
 work/patched-manifest.bin

@@ -227,17 +227,24 @@
     /* idxActivity 对应的字符串保持不变，显式写出以便审阅 */
     void idxActivity;
 
-    /* 3.5 准备要新增的权限：去重并把权限名追加进字符串池（索引追加在末尾，不影响已有索引） */
-    var permsToAdd = [];
-    if (req.permissions && req.permissions.length) {
-      var existing = collectExistingPerms(data.subarray(poolEnd), strings);
-      for (var pi = 0; pi < req.permissions.length; pi++) {
-        var pname = req.permissions[pi];
-        if (!pname || existing[pname]) continue;         /* 模板已声明的（如联网）不重复添加 */
-        var pidx = idxOf(pname);
-        if (pidx < 0) { strings.push(pname); pidx = strings.length - 1; }
-        permsToAdd.push(pidx);
-      }
+    /* 3.5 准备权限变更：勾选但模板未声明的新增；模板已声明但取消勾选的移除。
+     * permissionCatalog 界定"用户可决定的权限范围"，模板里不在清单中的权限
+     * （如 ACCESS_NETWORK_STATE）保持原样，避免误删系统依赖。 */
+    var permsToAdd = [], permsToRemove = [];
+    var existing = collectExistingPerms(data.subarray(poolEnd), strings);
+    var reqPerms = req.permissions || [];
+    var checked = {};
+    for (var c0 = 0; c0 < reqPerms.length; c0++) checked[reqPerms[c0]] = true;
+    var catalog = req.permissionCatalog || reqPerms;
+    for (var r0 = 0; r0 < catalog.length; r0++) {
+      if (existing[catalog[r0]] && !checked[catalog[r0]]) permsToRemove.push(catalog[r0]);
+    }
+    for (var pi = 0; pi < reqPerms.length; pi++) {
+      var pname = reqPerms[pi];
+      if (!pname || existing[pname]) continue;
+      var pidx = idxOf(pname);
+      if (pidx < 0) { strings.push(pname); pidx = strings.length - 1; } /* 追加在末尾，已有索引不变 */
+      permsToAdd.push(pidx);
     }
 
     /* 4. 重建字符串池：头(28B) + 偏移表 + 逐条 4 字节对齐的 UTF-16 数据 */
@@ -276,6 +283,7 @@
 
     /* 5. 在池后的 XML 节点流中插入权限声明，并修补 versionCode */
     var rest = data.subarray(poolEnd);
+    if (permsToRemove.length) rest = removePermissions(rest, strings, permsToRemove);
     if (permsToAdd.length) rest = insertPermissions(rest, strings, permsToAdd);
     if (req.versionCode) patchVersionCode(rest, strings, req.versionCode);
 
@@ -313,6 +321,48 @@
       off += size;
     }
     return found;
+  }
+
+  /**
+   * 从节点流中删除指定的 uses-permission 节点对（START + 紧随的 END）。
+   * 模板内置的联网权限在用户取消勾选时走这里，保证勾选框与产物一致。
+   * uses-permission 是空元素，START 后紧跟对应 END，因此成对跳过即可，无需维护栈。
+   */
+  function removePermissions(data, strings, names) {
+    var idxUses = strings.indexOf("uses-permission");
+    var idxName = strings.indexOf("name");
+    if (idxUses < 0 || idxName < 0) throw new Error("模板缺少权限节点所需的字符串");
+    var want = {};
+    for (var w = 0; w < names.length; w++) want[names[w]] = true;
+
+    var blocks = [], off = 0, skipEnd = false;
+    while (off + 8 <= data.length) {
+      var t = rd16(data, off), size = rd32(data, off + 4);
+      if (size < 8 || off + size > data.length) { blocks.push(data.subarray(off)); break; }
+      if (skipEnd) { skipEnd = false; off += size; continue; } /* 被删 START 的配对 END */
+      if (t === CHUNK_XML_START_ELEM && rd32(data, off + 20) === idxUses) {
+        var pname = permNameOf(data, off, idxName, strings);
+        if (pname && want[pname]) { skipEnd = true; off += size; continue; }
+      }
+      blocks.push(data.subarray(off, off + size));
+      off += size;
+    }
+    return blocks.length ? concatBytes(blocks) : new Uint8Array(0);
+  }
+
+  /** 读取 uses-permission START 节点的 android:name 属性值 */
+  function permNameOf(data, off, idxName, strings) {
+    var attrStart = rd16(data, off + 24);
+    var attrSize = rd16(data, off + 26);
+    var attrCount = rd16(data, off + 28);
+    for (var k = 0; k < attrCount; k++) {
+      var ap = off + 16 + attrStart + k * attrSize;
+      if (rd32(data, ap + 4) === idxName && data[ap + 15] === 0x03) {
+        var vi = rd32(data, ap + 16);
+        return vi < strings.length ? strings[vi] : null;
+      }
+    }
+    return null;
   }
 
   /**
@@ -679,7 +729,8 @@
           versionName: opts.versionName,
           versionCode: opts.versionCode,
           "package": opts["package"],
-          permissions: opts.permissions
+          permissions: opts.permissions,
+          permissionCatalog: opts.permissionCatalog
         });
 
         /* 2. 组装新条目 */
