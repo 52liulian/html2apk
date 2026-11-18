@@ -199,7 +199,9 @@ def verify_apk(path, expect):
     assert label in strings, f"label 未写入：{label}"
     assert vname in strings, f"versionName 未写入：{vname}"
     if pkg:
-        assert pkg in strings and pkg + ".MainActivity" in strings, "包名未写入"
+        assert pkg in strings, "包名未写入"
+        # Activity 类名必须保持模板原值，否则系统找不到 dex 里的类而闪退
+        assert "com.parap.webview.MainActivity" in strings, "Activity 类名被误改"
     r = axml_find_attr(manifest, "manifest", "versionCode")
     assert r and r[1] == vercode, f"versionCode 属性不符：{r}"
     print(f"    label={label!r} versionName={vname!r} versionCode={vercode} 包名={pkg or '默认'} ✓")
@@ -284,7 +286,7 @@ def verify_apk(path, expect):
 
 
 if __name__ == "__main__":
-    icon = Path("ref/apk-editor/cmd/release/icon.png").read_bytes()
+    icon = Path("work/test-icon.png").read_bytes()
     url = b"https://www.example.com"
     # 与 node-test 中一致的测试 zip 内容
     zip_assets = {

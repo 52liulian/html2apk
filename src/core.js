@@ -216,12 +216,16 @@
       throw new Error("模板 manifest 中未找到预期的默认字符串，模板文件可能不匹配");
     }
 
-    /* 3. 替换字符串（数量不变）；包名未指定时替换为默认包名 */
+    /* 3. 替换字符串（数量不变）
+     * 注意：Activity 类名必须保持模板原值 com.parap.webview.MainActivity。
+     * 该类已编译进 classes3.dex，改 manifest 里的类名只会让系统找不到类而闪退。
+     * 这里只改 applicationId（package 属性），Android 允许它与 Activity 实际类名不一致。 */
     if (req.label) strings[idxLabel] = req.label;
     if (req.versionName) strings[idxVersionName] = req.versionName;
     var pkg = req["package"] || DEFAULT_PACKAGE;
     strings[idxPackage] = pkg;
-    strings[idxActivity] = pkg + ".MainActivity";
+    /* idxActivity 对应的字符串保持不变，显式写出以便审阅 */
+    void idxActivity;
 
     /* 4. 重建字符串池：头(28B) + 偏移表 + 逐条 4 字节对齐的 UTF-16 数据 */
     var offsets = new Uint32Array(strings.length);

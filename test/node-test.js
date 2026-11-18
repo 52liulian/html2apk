@@ -62,8 +62,8 @@ function buildTestZip() {
   return new Uint8Array(Buffer.concat(parts));
 }
 
-/* 512x512 测试图标（PNG 最小结构：1x1 黑色放大不行——直接用参考图标） */
-const iconData = new Uint8Array(fs.readFileSync(path.join(ROOT, "ref/apk-editor/cmd/release/icon.png")));
+/* 256x256 测试图标（work/test-icon.png，由 tools/make_test_icon.py 生成） */
+const iconData = new Uint8Array(fs.readFileSync(path.join(ROOT, "work/test-icon.png")));
 
 const cases = [
   {

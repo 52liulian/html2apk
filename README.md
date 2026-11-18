@@ -56,7 +56,9 @@ html2apk/
 
 成品 HTML 内嵌了模板 APK 与签名证书（base64），运行时由纯 JS 完成三步：
 
-1. **AXML 修补**：解析模板 `AndroidManifest.xml` 的 UTF-16 字符串池并重建，精确替换应用名、版本名称、包名及 Activity 类名，就地改写 versionCode 整型属性。支持中文与任意长度名称（不受原始字符串长度限制）。
+1. **AXML 修补**：解析模板 `AndroidManifest.xml` 的 UTF-16 字符串池并重建，精确替换应用名、版本名称、包名（applicationId），就地改写 versionCode 整型属性。支持中文与任意长度名称（不受原始字符串长度限制）。
+
+   Activity 类名保持模板原值 `com.parap.webview.MainActivity` 不变。该类已编译进 `classes3.dex`，若随包名一起改写，会导致 `ClassNotFoundException` 并使应用启动闪退。Android 允许 applicationId 与 Activity 实际类名不同，因此自定义包名功能不受影响。
 2. **ZIP 追加式重打包**：保留模板原始数据区（确保 `resources.arsc` 保持未压缩且 4 字节对齐，满足 Android 11+ 要求），追加新条目后重写中央目录与 EOCD。
 3. **APK v2 签名**：Merkle 分块摘要（0xa5 前缀 1 MB 分块 → 0x5a 聚合）+ WebCrypto `RSASSA-PKCS1-v1_5` / SHA-256 签名。签名块插入 Central Directory 之前并修正 EOCD，私钥由 PKCS#1 转换为 PKCS#8 后导入。
 
@@ -75,6 +77,8 @@ node test/node-test.js
 # 3. 独立验证：解析 APK、检查内容、重算 Merkle 摘要并用证书公钥验签
 python tools/verify.py
 ```
+
+若 `work/test-icon.png` 不存在，先运行 `python tools/make_test_icon.py` 生成测试图标。
 
 要换用自己的模板或签名证书，替换 `assets/` 下对应文件后重新执行 `build.py`。注意模板 APK 的 manifest 默认字符串需与 `src/core.js` 中的 `TPL_LABEL` / `TPL_VERSION_NAME` / `TPL_PACKAGE` 一致，否则引擎会报“模板文件可能不匹配”。
 
