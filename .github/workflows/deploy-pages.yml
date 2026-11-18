@@ -1,0 +1,51 @@
+name: 自动部署到 GitHub Pages
+
+# 触发条件：main 分支有推送，或手动触发
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 需要写权限才能推送 gh-pages 分支
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 拉取 main 分支完整代码
+      - name: 检出 main 分支
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      # 2. 用构建产物准备站点目录：dist/html2apk.html → index.html
+      - name: 准备站点文件
+        run: |
+          mkdir -p _site
+          cp dist/html2apk.html _site/index.html
+          touch _site/.nojekyll
+          echo "准备完成："
+          ls -la _site
+
+      # 3. 强制推送到 gh-pages 分支（Pages 已配置为从该分支部署）
+      - name: 推送到 gh-pages 分支
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          cd _site
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          # 没有变化时跳过提交，避免空提交失败
+          if git diff --cached --quiet; then
+            echo "页面内容无变化，跳过提交"
+          else
+            git commit -m "chore: 自动从 main 同步页面 (${GITHUB_SHA::7})"
+          fi
+          git remote add origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${REPO}.git"
+          git push -f origin gh-pages
+          echo "已推送 gh-pages 分支"
