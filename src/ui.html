@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Html2Apk · 网页打包小工具</title>
+<style>
+  /* ===== 基础与主题（浅色） ===== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --primary: #0e9f6e;
+    --primary-dark: #0b8459;
+    --primary-light: #e9f7f1;
+    --danger: #e5484d;
+    --success: #2f9e68;
+    --text: #1f2430;
+    --text-2: #6b7280;
+    --border: #e2e5ec;
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --radius: 12px;
+  }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+    background: var(--bg); color: var(--text);
+    min-height: 100vh; padding: 24px 16px 60px;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  /* ===== 顶部 ===== */
+  header { text-align: center; margin-bottom: 24px; }
+  header h1 { font-size: 26px; letter-spacing: 1px; }
+  header h1 .hl { color: var(--primary); }
+  header p { color: var(--text-2); margin-top: 6px; font-size: 14px; }
+
+  /* ===== 卡片 ===== */
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px 22px; margin-bottom: 18px;
+  }
+  .card h2 { font-size: 15.5px; margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+  .card h2 .sub { font-weight: 400; color: var(--text-2); font-size: 12px; }
+  .hint { font-size: 12.5px; color: var(--text-2); margin-top: 6px; line-height: 1.6; }
+
+  /* ===== 内容来源标签页 ===== */
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .tab {
+    flex: 1; text-align: center; padding: 9px 0; border-radius: 8px;
+    border: 1px solid var(--border); background: #fff; cursor: pointer;
+    font-size: 14px; color: var(--text-2); transition: all .15s; user-select: none;
+  }
+  .tab:hover { border-color: var(--primary); color: var(--primary); }
+  .tab.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+  .pane { display: none; }
+  .pane.active { display: block; }
+
+  /* ===== 表单 ===== */
+  input[type=text], input[type=number], textarea {
+    width: 100%; border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; font-size: 14px; color: var(--text);
+    outline: none; transition: border .15s; background: #fff;
+    font-family: inherit;
+  }
+  input:focus, textarea:focus { border-color: var(--primary); }
+  textarea { min-height: 160px; resize: vertical; font-family: Consolas, Menlo, monospace; font-size: 13px; line-height: 1.5; }
+  textarea.drag-over { border-color: var(--primary); background: var(--primary-light); }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 13.5px; font-weight: 600; margin-bottom: 6px; }
+  .field label .sub { font-weight: 400; color: var(--text-2); font-size: 12px; margin-left: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+  /* ===== 拖拽区 ===== */
+  .drop {
+    border: 2px dashed var(--border); border-radius: 10px; padding: 26px 16px;
+    text-align: center; cursor: pointer; transition: all .15s; color: var(--text-2); font-size: 13.5px;
+  }
+  .drop .big { font-size: 30px; margin-bottom: 6px; }
+  .drop strong { color: var(--primary); }
+  .drop:hover, .drop.over { border-color: var(--primary); background: var(--primary-light); }
+  .drop.has-file { border-style: solid; border-color: var(--success); background: #f0faf5; color: var(--text); }
+
+  /* ===== 图标预览 ===== */
+  .icon-row { display: flex; gap: 16px; align-items: center; }
+  .icon-preview {
+    width: 72px; height: 72px; border-radius: 14px; border: 1px solid var(--border);
+    background: #fafbfc center / cover no-repeat; flex-shrink: 0;
+  }
+  .icon-preview.empty { display: flex; align-items: center; justify-content: center; color: #c3c8d4; font-size: 26px; }
+
+  /* ===== 生成按钮 ===== */
+  .btn {
+    width: 100%; padding: 13px; border: none; border-radius: 10px;
+    background: var(--primary); color: #fff; font-size: 16px; font-weight: 600;
+    cursor: pointer; transition: background .15s; letter-spacing: 2px;
+  }
+  .btn:hover { background: var(--primary-dark); }
+  .btn:disabled { background: #a3d9c0; cursor: not-allowed; }
+
+  /* ===== 提示条 ===== */
+  .msg { display: none; border-radius: 8px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px; line-height: 1.6; }
+  .msg.error { display: block; background: #fdf0f0; color: var(--danger); border: 1px solid #f5c6c8; }
+  .msg.success { display: block; background: #effaf3; color: var(--success); border: 1px solid #bfe8cf; }
+  .msg.info { display: block; background: var(--primary-light); color: var(--primary-dark); border: 1px solid #bfe3d3; }
+
+  /* ===== 结果卡片 ===== */
+  .result { text-align: center; padding: 26px 16px; }
+  .result .ok { font-size: 34px; }
+  .result h3 { margin: 10px 0 4px; }
+  .result p { color: var(--text-2); font-size: 13px; }
+  .result .btn { width: auto; padding: 11px 34px; margin-top: 16px; letter-spacing: 0; }
+
+  footer { text-align: center; color: #b0b6c3; font-size: 12px; margin-top: 26px; line-height: 1.8; }
+
+  /* 加载动画 */
+  .spin {
+    display: inline-block; width: 16px; height: 16px; border: 2px solid rgba(255,255,255,.4);
+    border-top-color: #fff; border-radius: 50%; animation: sp .7s linear infinite; vertical-align: -3px; margin-right: 8px;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Html2Apk <span class="hl">网页打包</span>小工具</h1>
+    <p>把网址、网页源码或 zip 打包成一个安卓 app，全程本地完成</p>
+  </header>
+
+  <div class="msg" id="msg"></div>
+
+  <!-- ===== WebView 内容 ===== -->
+  <div class="card">
+    <h2>&#128231; 打包内容</h2>
+    <div class="tabs">
+      <div class="tab active" data-pane="p-url">网址</div>
+      <div class="tab" data-pane="p-html">HTML 源码</div>
+      <div class="tab" data-pane="p-zip">压缩包</div>
+    </div>
+
+    <div class="pane active" id="p-url">
+      <div class="field">
+        <input type="text" id="url" placeholder="https://www.example.com" spellcheck="false">
+        <div class="hint">应用启动后由内置 WebView 加载该网址；未带协议时自动补全 https://。</div>
+      </div>
+    </div>
+
+    <div class="pane" id="p-html">
+      <div class="field">
+        <textarea id="html" placeholder="粘贴完整的 HTML 源码（含 &lt;!DOCTYPE html&gt;），也可直接拖入 .html 文件自动读取" spellcheck="false"></textarea>
+        <div class="hint">源码将作为 assets/index.html 打包；如引用外部 CSS/JS/图片，建议改用压缩包方式。支持拖入 .html/.htm 文件自动读取源码。</div>
+      </div>
+    </div>
+
+    <div class="pane" id="p-zip">
+      <div class="drop" id="drop-zip">
+        <div class="big">&#128230;</div>
+        <div>选择 <strong>ZIP</strong>（不要包含外层文件夹）文件，或拖拽至此</div>
+        <div class="hint" id="zip-info"></div>
+      </div>
+      <input type="file" id="file-zip" accept=".zip" hidden>
+      <div class="hint">压缩包根目录必须包含 index.html，html/css/js 等资源将解包进应用 assets 目录，可离线运行。</div>
+    </div>
+  </div>
+
+  <!-- ===== APK 信息 ===== -->
+  <div class="card">
+    <h2>&#128203; 应用信息</h2>
+    <div class="field">
+      <label>软件名称 <span class="sub">装到手机上显示的名字，支持中文</span></label>
+      <input type="text" id="label" placeholder="例如：我的应用" maxlength="30">
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label>版本号 <span class="sub">整数，升级用</span></label>
+        <input type="number" id="versionCode" value="1" min="1" step="1">
+      </div>
+      <div class="field">
+        <label>版本名称 <span class="sub">给人看的</span></label>
+        <input type="text" id="versionName" value="1.0.0" maxlength="30">
+      </div>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <label>包名 <span class="sub">选填，默认 com.xiao.webview</span></label>
+      <input type="text" id="package" placeholder="com.example.app" spellcheck="false">
+    </div>
+  </div>
+
+  <!-- ===== 应用图标 ===== -->
+  <div class="card">
+    <h2>&#127873; 应用图标<span class="sub">可选</span></h2>
+    <div class="icon-row">
+      <div class="icon-preview empty" id="icon-preview">?</div>
+      <div class="drop" id="drop-icon" style="flex:1;padding:18px 12px">
+        <div class="big" style="font-size:24px">&#128444;&#65039;</div>
+        <div>选择 <strong>PNG 图标</strong> 文件或拖拽至此</div>
+        <div class="hint">仅支持 PNG 格式，正方形，建议 256×256 或 512×512 像素</div>
+        <div class="hint" id="icon-info"></div>
+      </div>
+      <input type="file" id="file-icon" accept=".png" hidden>
+    </div>
+  </div>
+
+  <button class="btn" id="btn-gen" onclick="generate()">&#9889; 生成 APK</button>
+
+  <!-- ===== 结果 ===== -->
+  <div class="card result" id="result" style="display:none">
+    <div class="ok">&#9989;</div>
+    <h3>APK 生成成功</h3>
+    <p id="result-meta"></p>
+    <button class="btn" id="btn-save">&#11015;&#65039; 保存到本地</button>
+  </div>
+
+  <footer>
+    自用小工具 · 打包和签名都在本机浏览器里完成，数据不上传<br>
+    需要 Chrome / Edge 103+ · 调试签名（v2），安装时允许"未知来源"即可
+  </footer>
+</div>
+
+<script>
+/*__CORE__*/
+</script>
+<script>
+/* 构建时注入：模板 APK（base64）与签名证书/密钥（PEM 文本） */
+window.__HTML2APK_ASSETS__ = __ASSETS_JSON__;
+</script>
+<script>
+"use strict";
+/* ===================== 状态 ===================== */
+var state = { zipFile: null, zipData: null, iconFile: null, iconData: null, lastApk: null, lastName: "app.apk" };
+
+/* ===================== 工具 ===================== */
+function $(id) { return document.getElementById(id); }
+function showMsg(type, text) {
+  var el = $("msg");
+  el.className = "msg " + type;
+  el.innerHTML = text;
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function clearMsg() { $("msg").className = "msg"; }
+function fmtSize(n) {
+  if (n < 1024) return n + " B";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " KB";
+  return (n / 1048576).toFixed(2) + " MB";
+}
+
+/* ===================== 标签页 ===================== */
+document.querySelectorAll(".tab").forEach(function (t) {
+  t.addEventListener("click", function () {
+    document.querySelectorAll(".tab").forEach(function (x) { x.classList.remove("active"); });
+    document.querySelectorAll(".pane").forEach(function (x) { x.classList.remove("active"); });
+    t.classList.add("active");
+    $(t.dataset.pane).classList.add("active");
+    clearMsg();
+  });
+});
+
+/* ===================== 拖拽通用 ===================== */
+function bindDrop(dropEl, inputEl, handler) {
+  dropEl.addEventListener("click", function () { inputEl.click(); });
+  dropEl.addEventListener("dragover", function (e) { e.preventDefault(); dropEl.classList.add("over"); });
+  dropEl.addEventListener("dragleave", function () { dropEl.classList.remove("over"); });
+  dropEl.addEventListener("drop", function (e) {
+    e.preventDefault(); dropEl.classList.remove("over");
+    if (e.dataTransfer.files.length) handler(e.dataTransfer.files[0]);
+  });
+  inputEl.addEventListener("change", function () {
+    if (inputEl.files.length) handler(inputEl.files[0]);
+  });
+}
+
+/* ===================== HTML 源码：拖入文件自动读取 ===================== */
+(function () {
+  var ta = $("html");
+  ta.addEventListener("dragover", function (e) {
+    e.preventDefault();
+    ta.classList.add("drag-over");
+  });
+  ta.addEventListener("dragleave", function () { ta.classList.remove("drag-over"); });
+  ta.addEventListener("drop", function (e) {
+    e.preventDefault();
+    ta.classList.remove("drag-over");
+    var f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    if (!/\.html?$/i.test(f.name)) { showMsg("error", "请拖入 .html 或 .htm 文件（如引用外部资源请改用压缩包方式）"); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      ta.value = reader.result;
+      ta.focus();
+      clearMsg();
+    };
+    reader.readAsText(f);
+  });
+})();
+
+/* ===================== 压缩包 ===================== */
+bindDrop($("drop-zip"), $("file-zip"), function (f) {
+  if (!/\.zip$/i.test(f.name)) { showMsg("error", "仅支持 .zip 压缩包"); return; }
+  var reader = new FileReader();
+  reader.onload = function () {
+    state.zipFile = f;
+    state.zipData = new Uint8Array(reader.result);
+    $("drop-zip").classList.add("has-file");
+    $("zip-info").innerHTML = "已选择：" + f.name + "（" + fmtSize(f.size) + "）";
+    clearMsg();
+  };
+  reader.readAsArrayBuffer(f);
+});
+
+/* ===================== 图标 ===================== */
+bindDrop($("drop-icon"), $("file-icon"), function (f) {
+  if (!/\.png$/i.test(f.name)) { showMsg("error", "图标仅支持 PNG 格式"); return; }
+  var url = URL.createObjectURL(f);
+  var img = new Image();
+  img.onload = function () {
+    if (img.width !== img.height) { URL.revokeObjectURL(url); showMsg("error", "图标需要为正方形，当前 " + img.width + "×" + img.height); return; }
+    if (img.width < 96 || img.width > 1024) { URL.revokeObjectURL(url); showMsg("error", "图标边长需在 96~1024 像素之间（推荐 256 或 512），当前 " + img.width); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      state.iconFile = f;
+      state.iconData = new Uint8Array(reader.result);
+      var pv = $("icon-preview");
+      pv.classList.remove("empty");
+      pv.textContent = "";                               /* 清掉占位符 "?" */
+      pv.style.backgroundImage = 'url("' + url + '")';
+      $("drop-icon").classList.add("has-file");
+      $("icon-info").innerHTML = "已选择：" + f.name + "（" + img.width + "×" + img.height + "，" + fmtSize(f.size) + "）";
+      clearMsg();
+    };
+    reader.readAsArrayBuffer(f);
+  };
+  img.onerror = function () { URL.revokeObjectURL(url); showMsg("error", "无法解析该图片，请确认是有效的 PNG 文件"); };
+  img.src = url;
+});
+
+/* ===================== 校验 ===================== */
+function validatePackageName(pkg) {
+  var parts = pkg.split(".");
+  if (parts.length < 3) return false;
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i];
+    if (!p) return false;
+    if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(p) && !/^[A-Za-z0-9_]+$/.test(p)) return false;
+  }
+  return true;
+}
+
+/* ===================== 生成 ===================== */
+function generate() {
+  clearMsg();
+  $("result").style.display = "none";
+
+  /* ---- 校验 ---- */
+  var pane = document.querySelector(".tab.active").dataset.pane;
+  var opts = { assets: window.__HTML2APK_ASSETS__ };
+
+  if (pane === "p-url") {
+    var url = $("url").value.trim();
+    if (!url) { showMsg("error", "请填写网址"); return; }
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    opts.url = url;
+  } else if (pane === "p-html") {
+    var html = $("html").value;
+    if (!html.trim()) { showMsg("error", "请粘贴 HTML 源码"); return; }
+    opts.html = new TextEncoder().encode(html);
+  } else {
+    if (!state.zipData) { showMsg("error", "请选择压缩包文件"); return; }
+    opts.htmlZip = state.zipData;
+  }
+
+  var label = $("label").value.trim();
+  if (!label) { showMsg("error", "请填写软件名称"); return; }
+  opts.label = label;
+  opts.versionCode = Math.max(1, parseInt($("versionCode").value, 10) || 1);
+  opts.versionName = $("versionName").value.trim() || "1.0.0";
+
+  var pkg = $("package").value.trim();
+  if (pkg) {
+    if (!validatePackageName(pkg)) { showMsg("error", "包名格式不合法：应形如 com.example.app"); return; }
+    opts["package"] = pkg;
+  }
+  if (state.iconData) opts.icon = state.iconData;
+
+  /* ---- 本地打包 ---- */
+  var btn = $("btn-gen");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span>正在解析模板…';
+
+  Html2Apk.build(opts)
+    .then(function (apk) {
+      state.lastApk = new Blob([apk], { type: "application/vnd.android.package-archive" });
+      state.lastName = label.replace(/[\\/:*?"<>|]/g, "") + ".apk";
+      $("result-meta").innerHTML = state.lastName + " · " + fmtSize(apk.length) +
+        " · " + label + " v" + opts.versionName + " (" + opts.versionCode + ")";
+      $("result").style.display = "block";
+      $("result").scrollIntoView({ behavior: "smooth", block: "center" });
+      showMsg("success", "打包完成！点击下方按钮保存 APK 文件。");
+    })
+    .catch(function (err) {
+      showMsg("error", "生成失败：" + (err && err.message ? err.message : err));
+    })
+    .finally(function () {
+      btn.disabled = false;
+      btn.innerHTML = "&#9889; 生成 APK";
+    });
+}
+
+/* ===================== 保存 ===================== */
+$("btn-save").addEventListener("click", function () {
+  if (!state.lastApk) return;
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(state.lastApk);
+  a.download = state.lastName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+});
+
+/* Ctrl+Enter 快捷生成 */
+document.addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) generate();
+});
+</script>
+</body>
+</html>
