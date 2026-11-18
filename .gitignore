@@ -18,6 +18,10 @@ work/out-perm.apk
 work/out-dist-perm.apk
 work/out-nonet.apk
 work/out-onlycam.apk
+work/out-allperms.apk
+work/allperms.json
+work/dumpsys-allperms.txt
+work/allperms-screen.png
 work/ui-*.png
 work/ui-*.js
 work/patched-manifest.bin

@@ -42,7 +42,9 @@ html2apk/
 │   ├── build.py         # 构建脚本：把引擎/UI/模板/证书注入为单文件
 │   └── verify.py        # 独立验证脚本：解析 APK 并重算摘要、验签
 ├── test/
-│   └── node-test.js     # Node 无头测试（三种内容模式 + 异常路径）
+│   ├── node-test.js        # Node 无头测试（三种内容模式 + 异常路径）
+│   ├── all-perms-test.js   # 从 UI 清单生成 14 项权限全勾选的 APK（用 dist 内嵌引擎）
+│   └── all-perms-verify.py # 全权限 APK 校验：节点统计 + 独立验签
 ├── assets/
 │   ├── template.apk     # WebView 模板 APK（内嵌到成品中）
 │   ├── signing.crt      # 签名证书
@@ -80,6 +82,9 @@ node test/node-test.js
 
 # 3. 独立验证：解析 APK、检查内容、重算 Merkle 摘要并用证书公钥验签
 python tools/verify.py
+
+# 4. 全权限回归：用线上同款引擎生成 14 项权限全勾的 APK 并校验
+node test/all-perms-test.js && python test/all-perms-verify.py
 ```
 
 若 `work/test-icon.png` 不存在，先运行 `python tools/make_test_icon.py` 生成测试图标。
